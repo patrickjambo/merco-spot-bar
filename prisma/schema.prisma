@@ -1,0 +1,218 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Enums
+enum UserRole {
+  superadmin
+  manager
+}
+
+enum SaleType {
+  packet
+  unit
+}
+
+enum SaleStatus {
+  confirmed
+  pending_approval
+  voided
+}
+
+enum MovementType {
+  sale
+  restock
+  adjustment
+  audit_correction
+}
+
+enum AlertSeverity {
+  info
+  warning
+  critical
+}
+
+// 10.1 users
+model User {
+  id            String    @id @default(cuid())
+  fullName      String    @map("full_name")
+  username      String    @unique
+  email         String?   @unique
+  passwordHash  String    @map("password_hash")
+  role          UserRole  @default(manager)
+  shiftStart    String?   @map("shift_start") // e.g. "08:00"
+  shiftEnd      String?   @map("shift_end")   // e.g. "17:00"
+  phone         String?
+  isBlocked     Boolean   @default(false) @map("is_blocked")
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  createdBy     String?   @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastLogin     DateTime? @map("last_login")
+  lastIp        String?   @map("last_ip")
+
+  // Relationships
+  creator       User?     @relation("UserCreator", fields: [createdBy], references: [id])
+  createdUsers  User[]    @relation("UserCreator")
+  
+  sales         Sale[]    @relation("ManagerSales")
+  movements     StockMovement[] @relation("MovementPerformer")
+  alerts        Alert[]   @relation("AlertManager")
+  resolvedAlerts Alert[]  @relation("AlertResolver")
+  auditLogs     AuditLog[]
+  priceChanges  PriceHistory[]
+
+  @@map("users")
+}
+
+// 10.2 products
+model Product {
+  id                String    @id @default(cuid())
+  name              String
+  brand             String?
+  category          String
+  imageUrl          String?   @map("image_url")
+  packetSize        Int       @map("packet_size")
+  pricePerPacket    Float     @map("price_per_packet")
+  pricePerUnit      Float     @map("price_per_unit")
+  stockUnits        Int       @default(0) @map("stock_units")
+  minStockThreshold Int       @default(0) @map("min_stock_threshold")
+  isActive          Boolean   @default(true) @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relationships
+  sales             Sale[]
+  movements         StockMovement[]
+  alerts            Alert[]
+  reconciliations   DailyReconciliation[]
+  priceHistory      PriceHistory[]
+
+  @@map("products")
+}
+
+// 10.3 sales
+model Sale {
+  id               String      @id @default(cuid())
+  managerId        String      @map("manager_id")
+  productId        String      @map("product_id")
+  saleType         SaleType    @map("sale_type")
+  quantity         Int
+  unitPriceAtSale  Float       @map("unit_price_at_sale")
+  totalAmount      Float       @map("total_amount")
+  status           SaleStatus  @default(confirmed)
+  flagged          Boolean     @default(false)
+  flagReason       String?     @map("flag_reason")
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  // Relationships
+  manager          User        @relation("ManagerSales", fields: [managerId], references: [id])
+  product          Product     @relation(fields: [productId], references: [id])
+  alerts           Alert[]
+
+  @@map("sales")
+  @@index([createdAt, status])
+  @@index([managerId])
+  @@index([productId])
+}
+
+// 10.4 stock_movements
+model StockMovement {
+  id              String        @id @default(cuid())
+  productId       String        @map("product_id")
+  movementType    MovementType  @map("movement_type")
+  quantityChange  Int           @map("quantity_change")
+  balanceAfter    Int           @map("balance_after")
+  notes           String?
+  performedBy     String?       @map("performed_by")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  // Relationships
+  product         Product       @relation(fields: [productId], references: [id])
+  performer       User?         @relation("MovementPerformer", fields: [performedBy], references: [id])
+
+  @@map("stock_movements")
+}
+
+// 10.5 alerts
+model Alert {
+  id                String        @id @default(cuid())
+  alertType         String        @map("alert_type")
+  severity          AlertSeverity
+  title             String
+  description       String
+  relatedManagerId  String?       @map("related_manager_id")
+  relatedProductId  String?       @map("related_product_id")
+  relatedSaleId     String?       @map("related_sale_id")
+  isResolved        Boolean       @default(false) @map("is_resolved")
+  resolvedAt        DateTime?     @map("resolved_at")
+  resolvedBy        String?       @map("resolved_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  // Relationships
+  manager           User?         @relation("AlertManager", fields: [relatedManagerId], references: [id])
+  resolver          User?         @relation("AlertResolver", fields: [resolvedBy], references: [id])
+  product           Product?      @relation(fields: [relatedProductId], references: [id])
+  sale              Sale?         @relation(fields: [relatedSaleId], references: [id])
+
+  @@map("alerts")
+  @@index([isResolved, createdAt])
+}
+
+// 10.6 audit_logs
+model AuditLog {
+  id           String    @id @default(cuid())
+  userId       String?   @map("user_id")
+  actionType   String    @map("action_type")
+  description  String
+  ipAddress    String?   @map("ip_address")
+  userAgent    String?   @map("user_agent")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relationships
+  user         User?     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// 10.7 daily_reconciliations
+model DailyReconciliation {
+  id                String    @id @default(cuid())
+  date              DateTime  @db.Date
+  productId         String    @map("product_id")
+  openingStock      Int       @map("opening_stock")
+  unitsSold         Int       @map("units_sold")
+  expectedClosing   Int       @map("expected_closing")
+  actualClosing     Int?      @map("actual_closing")
+  discrepancy       Int?
+  reportGeneratedAt DateTime  @default(now()) @map("report_generated_at")
+
+  // Relationships
+  product           Product   @relation(fields: [productId], references: [id])
+
+  @@map("daily_reconciliations")
+}
+
+// 10.8 price_history
+model PriceHistory {
+  id              String   @id @default(cuid())
+  productId       String   @map("product_id")
+  oldPacketPrice  Float    @map("old_packet_price")
+  newPacketPrice  Float    @map("new_packet_price")
+  oldUnitPrice    Float    @map("old_unit_price")
+  newUnitPrice    Float    @map("new_unit_price")
+  changedBy       String   @map("changed_by")
+  changedAt       DateTime @default(now()) @map("changed_at")
+
+  // Relationships
+  product         Product  @relation(fields: [productId], references: [id])
+  changer         User     @relation(fields: [changedBy], references: [id])
+
+  @@map("price_history")
+}
