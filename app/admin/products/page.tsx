@@ -31,30 +31,56 @@ export default function AdminProductsPage() {
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
     
     setUploadingImage(true);
-    const data = new FormData();
-    data.append('file', file);
 
-    try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: data,
-      });
-      if (res.ok) {
-        const { url } = await res.json();
-        setFormData((prev: any) => ({ ...prev, imageUrl: url }));
-      } else {
-        alert("Image upload failed");
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        const MAX_SIZE = 500;
+
+        if (width > height && width > MAX_SIZE) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
+        } else if (height > MAX_SIZE) {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64String = canvas.toDataURL('image/jpeg', 0.8);
+          setFormData((prev: any) => ({ ...prev, imageUrl: base64String }));
+        }
+        setUploadingImage(false);
+      };
+      
+      img.onerror = () => {
+        alert("Failed to parse image.");
+        setUploadingImage(false);
+      };
+      
+      if (event.target?.result) {
+        img.src = event.target.result as string;
       }
-    } catch (error) {
-      console.error("Error uploading image:", error);
-    } finally {
+    };
+    
+    reader.onerror = () => {
+      alert("Failed to read file.");
       setUploadingImage(false);
-    }
+    };
+    
+    reader.readAsDataURL(file);
   };
 
   const handleDelete = async (id: string) => {
