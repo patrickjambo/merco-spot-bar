@@ -37,8 +37,35 @@ function POSContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCartOpenMobile, setIsCartOpenMobile] = useState(false);
+  const [tables, setTables] = useState<any[]>([]);
 
   useEffect(() => {
+    // Load local tables
+    const saved = localStorage.getItem("merico_tables");
+    if (saved) {
+      setTables(JSON.parse(saved));
+    } else {
+      const DEFAULT_TABLES = [
+        { id: "1", name: "Table 1", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+        { id: "2", name: "Table 2", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+        { id: "3", name: "Table 3", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+        { id: "4", name: "Table 4", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+        { id: "5", name: "Table 5", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+        { id: "bar", name: "Bar Seats", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+        { id: "vip1", name: "VIP 1", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+        { id: "vip2", name: "VIP 2", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+      ];
+      setTables(DEFAULT_TABLES);
+      localStorage.setItem("merico_tables", JSON.stringify(DEFAULT_TABLES));
+    }
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "merico_tables" && e.newValue) {
+        setTables(JSON.parse(e.newValue));
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+
     async function loadProducts() {
       try {
         const res = await fetch("/api/products");
@@ -55,6 +82,10 @@ function POSContent() {
       }
     }
     loadProducts();
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
   }, []);
 
   const addToCart = (product: Product, saleType: "unit" | "packet") => {
@@ -116,7 +147,13 @@ function POSContent() {
               const tables = JSON.parse(savedTables);
               const updatedTables = tables.map((t: any) => {
                  if (t.id === selectedTable || t.name.toLowerCase() === selectedTable.toLowerCase()) {
-                    return { ...t, totalBill: (t.totalBill || 0) + total, status: "OCCUPIED" };
+                    return { 
+                      ...t, 
+                      totalBill: (t.totalBill || 0) + total, 
+                      status: "OCCUPIED",
+                      items: [...(t.items || []), ...cart],
+                      lastUpdated: Date.now()
+                    };
                  }
                  return t;
               });
@@ -181,8 +218,8 @@ function POSContent() {
               value={selectedTable}
               onChange={(e) => setSelectedTable(e.target.value)}
             >
-              {["1","2","3","4","5","bar","vip1","vip2"].map(t => (
-                <option key={t} value={t}>Table {t}</option>
+              {tables.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
           </div>

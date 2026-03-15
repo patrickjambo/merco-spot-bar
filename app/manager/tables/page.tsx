@@ -13,17 +13,18 @@ interface Table {
   guests: number;
   totalBill: number;
   lastUpdated: number;
+  items?: any[];
 }
 
 const DEFAULT_TABLES: Table[] = [
-  { id: "1", name: "Table 1", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now() },
-  { id: "2", name: "Table 2", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now() },
-  { id: "3", name: "Table 3", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now() },
-  { id: "4", name: "Table 4", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now() },
-  { id: "5", name: "Table 5", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now() },
-  { id: "bar", name: "Bar Seats", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now() },
-  { id: "vip1", name: "VIP 1", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now() },
-  { id: "vip2", name: "VIP 2", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now() },
+  { id: "1", name: "Table 1", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+  { id: "2", name: "Table 2", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+  { id: "3", name: "Table 3", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+  { id: "4", name: "Table 4", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+  { id: "5", name: "Table 5", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+  { id: "bar", name: "Bar Seats", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+  { id: "vip1", name: "VIP 1", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
+  { id: "vip2", name: "VIP 2", status: "FREE", guests: 0, totalBill: 0, lastUpdated: Date.now(), items: [] },
 ];
 
 export default function ManagerTablesPage() {
@@ -55,8 +56,28 @@ export default function ManagerTablesPage() {
     setTables(newTables);
     localStorage.setItem("merico_tables", JSON.stringify(newTables));
     if (selectedTable?.id === id) {
-      setSelectedTable({ ...selectedTable, ...updates, lastUpdated: Date.now() });
+      setSelectedTable({ ...selectedTable, ...updates, lastUpdated: Date.now() } as Table);
     }
+  };
+
+  const addTable = () => {
+    const newId = `t-${Date.now()}`;
+    const newName = prompt("Enter new table name", `Table ${tables.length + 1}`);
+    if (!newName) return;
+    
+    const newTable: Table = {
+      id: newId,
+      name: newName,
+      status: "FREE",
+      guests: 0,
+      totalBill: 0,
+      lastUpdated: Date.now(),
+      items: []
+    };
+    
+    const newTables = [...tables, newTable];
+    setTables(newTables);
+    localStorage.setItem("merico_tables", JSON.stringify(newTables));
   };
 
   const getStatusColor = (status: TableStatus) => {
@@ -102,6 +123,16 @@ export default function ManagerTablesPage() {
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Table Map */}
         <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
+          <div className="flex justify-between items-center mb-6">
+             <h2 className="text-xl font-bold dark:text-white">All Tables</h2>
+             <button 
+               onClick={addTable} 
+               className="bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors"
+             >
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+               Add Table
+             </button>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {tables.map(table => (
               <button 
@@ -136,13 +167,13 @@ export default function ManagerTablesPage() {
           {selectedTable ? (
             <>
               <div className="border-b border-zinc-200 dark:border-zinc-800 pb-4 mb-6">
-                 <h2 className="text-2xl font-bold">{selectedTable.name}</h2>
-                 <p className="text-zinc-500 uppercase text-xs font-bold tracking-wider mb-2">Current Status: {selectedTable.status}</p>
-                 <div className="flex gap-2 mt-4">
-                   <button onClick={() => updateTable(selectedTable.id, { status: "FREE", guests: 0, totalBill: 0 })} className="flex-1 py-2 text-xs font-bold rounded bg-green-100 hover:bg-green-200 text-green-800 transition-colors">Set Free</button>
+                <h2 className="text-2xl font-bold">{selectedTable.name}</h2>
+                <p className="text-zinc-500 uppercase text-xs font-bold tracking-wider mb-2">Current Status: {selectedTable.status}</p>
+                <div className="flex gap-2 mt-4">
+                   <button onClick={() => updateTable(selectedTable.id, { status: "FREE", guests: 0, totalBill: 0, items: [] })} className="flex-1 py-2 text-xs font-bold rounded bg-green-100 hover:bg-green-200 text-green-800 transition-colors">Set Free</button>
                    <button onClick={() => updateTable(selectedTable.id, { status: "OCCUPIED", guests: selectedTable.guests || 2 })} className="flex-1 py-2 text-xs font-bold rounded bg-red-100 hover:bg-red-200 text-red-800 transition-colors">Set Occupied</button>
                    <button onClick={() => updateTable(selectedTable.id, { status: "RESERVED" })} className="flex-1 py-2 text-xs font-bold rounded bg-amber-100 hover:bg-amber-200 text-amber-800 transition-colors">Set Reserved</button>
-                 </div>
+                </div>
               </div>
 
               {selectedTable.status !== "FREE" && selectedTable.status !== "RESERVED" && (
@@ -167,6 +198,38 @@ export default function ManagerTablesPage() {
                     />
                     <p className="text-xs text-zinc-400 mt-2">Adjusted dynamically based on cart entries.</p>
                   </div>
+
+                  {selectedTable.items && selectedTable.items.length > 0 && (
+                    <div className="mt-4 flex-1 mt-auto bg-zinc-50 dark:bg-zinc-800 rounded-lg p-4">
+                      <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2 border-b border-zinc-200 dark:border-zinc-700 pb-2">Items Consumed</h3>
+                      <ul className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                        {(() => {
+                          // Group identical items by id
+                          const groupedItems = selectedTable.items.reduce((acc, item) => {
+                            const existing = acc.find((i: any) => i.id === item.id);
+                            if (existing) {
+                              existing.quantity += item.quantity;
+                            } else {
+                              acc.push({ ...item });
+                            }
+                            return acc;
+                          }, [] as any[]);
+                          
+                          return groupedItems.map((item: any, idx: number) => (
+                            <li key={idx} className="flex justify-between items-center text-sm">
+                              <span className="text-zinc-700 dark:text-zinc-300">
+                                <span className="font-bold text-yellow-500 mr-2">{item.quantity}x</span>
+                                {item.name}
+                              </span>
+                              <span className="font-semibold text-zinc-900 dark:text-white">
+                                {(item.price * item.quantity).toLocaleString()} RWF
+                              </span>
+                            </li>
+                          ));
+                        })()}
+                      </ul>
+                    </div>
+                  )}
 
                   <div className="mt-auto pt-6">
                     <Link href={`/manager/pos?table=${selectedTable.id}`} className="w-full py-4 bg-yellow-500 hover:bg-yellow-600 text-black font-bold text-lg rounded-xl flex items-center justify-center gap-2 transition-all">
