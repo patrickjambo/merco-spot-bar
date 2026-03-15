@@ -156,42 +156,44 @@ function POSContent() {
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 flex flex-col">
       {/* Top Navigation */}
-      <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-4 flex justify-between items-center z-10 shadow-sm">
+      <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-4 flex flex-wrap lg:flex-nowrap justify-between items-center z-10 shadow-sm gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/manager/dashboard" className="text-zinc-500 hover:text-zinc-900 border border-zinc-300 rounded px-3 py-1 text-sm font-medium transition-colors">
-            &larr; Back to Dashboard
+          <Link href="/manager/dashboard" className="text-zinc-500 hover:text-zinc-900 border border-zinc-300 rounded px-3 py-1 text-sm font-medium transition-colors whitespace-nowrap">
+            &larr; Back<span className="hidden sm:inline"> to Dashboard</span>
           </Link>
-          <h1 className="text-xl font-bold dark:text-white">Record Sale</h1>
+          <h1 className="text-xl font-bold dark:text-white hidden sm:block">Record Sale</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg px-3 py-1 mr-4 border border-zinc-200 dark:border-zinc-700 focus-within:border-yellow-500 transition-colors">
-            <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg px-3 py-1 lg:mr-4 border border-zinc-200 dark:border-zinc-700 focus-within:border-yellow-500 transition-colors flex-1 lg:flex-none">
+            <svg className="w-5 h-5 text-zinc-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input 
               type="text" 
               placeholder="Search product..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent border-none outline-none text-sm px-2 w-48 text-zinc-900 dark:text-white placeholder-zinc-500"
+              className="bg-transparent border-none outline-none text-sm px-2 w-full lg:w-48 text-zinc-900 dark:text-white placeholder-zinc-500"
             />
           </div>
-          <label className="text-sm font-medium dark:text-zinc-300">Table:</label>
-          <select 
-            className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md py-1.5 px-3 !outline-none text-zinc-900 dark:text-white"
-            value={selectedTable}
-            onChange={(e) => setSelectedTable(e.target.value)}
-          >
-            {["1","2","3","4","5","bar","vip1","vip2"].map(t => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-          <div className="ml-4 pl-4 border-l border-zinc-200 dark:border-zinc-700">
+          <div className="flex items-center gap-2 shrink-0">
+            <label className="text-sm font-medium dark:text-zinc-300 hidden sm:block">Table:</label>
+            <select 
+              className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md py-1.5 px-2 !outline-none text-zinc-900 dark:text-white text-sm"
+              value={selectedTable}
+              onChange={(e) => setSelectedTable(e.target.value)}
+            >
+              {["1","2","3","4","5","bar","vip1","vip2"].map(t => (
+                <option key={t} value={t}>Table {t}</option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:ml-4 sm:pl-4 sm:border-l border-zinc-200 dark:border-zinc-700 shrink-0">
             <LogoutButton />
           </div>
         </div>
       </header>
 
       {/* Main Content Split */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {/* Left Side: Menu Selection */}
         <div className="flex-1 flex flex-col pt-4 overflow-hidden">
           {/* Categories Grid - Flex config so it spans nicely without hiding */}
@@ -265,7 +267,7 @@ function POSContent() {
         </div>
 
         {/* Right Side: Order Ticket / Checkout Cart */}
-        <div className="w-[400px] min-w-[350px] bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 flex flex-col shadow-2xl z-20">
+        <div className="w-full lg:w-[400px] lg:min-w-[350px] h-[45vh] lg:h-auto bg-white dark:bg-zinc-900 lg:border-l border-t lg:border-t-0 border-zinc-200 dark:border-zinc-800 flex flex-col shadow-2xl z-20 shrink-0">
           <div className="p-5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex justify-between items-center">
             <div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Current Order</h2>

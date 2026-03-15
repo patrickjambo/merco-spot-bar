@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     });
 
     // Redirect user to appropriate dashboard
-    const redirectUrl = user.role === 'superadmin' ? '/admin/dashboard' : '/manager/pos';
+    const redirectUrl = user.role === 'superadmin' ? '/admin/dashboard' : '/manager/dashboard';
 
     return NextResponse.json({ success: true, redirectUrl, role: user.role });
   } catch (error) {
