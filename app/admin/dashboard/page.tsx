@@ -16,35 +16,35 @@ export default async function AdminDashboardPage() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Run queries sequentially to avoid connection limit issues with the local 1-connection database
-  // 1. Get today's sales
-  const todaysSales = await prisma.sale.findMany({
-    where: {
-      createdAt: { gte: today },
-      status: "confirmed"
-    },
-    include: {
-      product: true,
-      manager: true
-    },
-    orderBy: { createdAt: "desc" }
-  });
-  
-  // 2. Fetch all products for stock value tracking
-  const allProducts = await prisma.product.findMany();
-
-  // 3. Alerts
-  const allUnresolvedAlerts = await prisma.alert.findMany({
-    where: { isResolved: false },
-    orderBy: { createdAt: "desc" },
-    include: { manager: true, product: true }
-  });
+  // Run queries perfectly in parallel for maximum speed
+  const [todaysSales, allProducts, allUnresolvedAlerts, managers] = await Promise.all([
+    prisma.sale.findMany({
+      where: {
+        createdAt: { gte: today },
+        status: "confirmed"
+      },
+      include: {
+        product: true,
+        manager: true
+      },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.product.findMany(),
+    prisma.alert.findMany({
+      where: { isResolved: false },
+      orderBy: { createdAt: "desc" },
+      include: { manager: true, product: true }
+    }),
+    prisma.user.findMany({
+      where: { role: "manager", isDeleted: false },
+      select: { id: true, fullName: true, role: true, lastLogin: true }
+    })
+  ]);
 
   // Auto-resolve 'low_stock' alerts if product stock is now above threshold
   let resolvedIds: string[] = [];
   try {
     const alertsToResolve = allUnresolvedAlerts.filter((alert: any) => {
-      // Both "low_stock" and "LOW_STOCK" to be safe
       return alert.alertType.toLowerCase() === "low_stock" && alert.product && alert.product.stockUnits > alert.product.minStockThreshold;
     });
 
@@ -62,12 +62,6 @@ export default async function AdminDashboardPage() {
   const unresolvedAlerts = allUnresolvedAlerts.filter(
     (a: any) => !resolvedIds.includes(a.id)
   );
-
-  // 4. Managers
-  const managers = await prisma.user.findMany({
-    where: { role: "manager", isDeleted: false },
-    select: { id: true, fullName: true, role: true, lastLogin: true }
-  });
 
   const todayRevenue = todaysSales.reduce((acc: number, sale: any) => acc + sale.totalAmount, 0);
   const unitsSoldToday = todaysSales.reduce((acc: number, sale: any) => {

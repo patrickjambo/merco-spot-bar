@@ -19,7 +19,7 @@ export default function AdminProductsPage() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch("/api/products");
+      const res = await fetch("/api/products?includeSales=true");
       const data = await res.json();
       // Ensure strict alphabetical sorting regardless of case
       const sorted = data.sort((a: any, b: any) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));

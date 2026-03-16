@@ -3,17 +3,22 @@ import { getPrisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   const prisma = getPrisma();
   try {
+    const { searchParams } = new URL(request.url);
+    const includeSales = searchParams.get('includeSales') === 'true';
+
     const records = await prisma.product.findMany({
       where: { isActive: true },
       orderBy: { name: 'asc' },
-      include: {
-        sales: {
-          where: { status: 'confirmed' }
+      ...(includeSales && {
+        include: {
+          sales: {
+            where: { status: 'confirmed' }
+          }
         }
-      }
+      })
     });
 
     const imageMapping: Record<string, string> = {
@@ -79,23 +84,23 @@ export async function GET() {
     const fallbackImage = "https://images.unsplash.com/photo-1582236965045-8b839b2cd813?q=80&w=800&auto=format&fit=crop";
 
     // Transform outgoing responses directly!
-    const products = records.map(p => {
-      let finalUrl = p.imageUrl || fallbackImage;
-      if (p.imageUrl && p.imageUrl.startsWith('/products/')) {
-        const key = p.imageUrl.replace('/products/', '');
+    const products = records.map((record: any) => {
+      let finalUrl = record.imageUrl || fallbackImage;
+      if (record.imageUrl && record.imageUrl.startsWith('/products/')) {
+        const key = record.imageUrl.replace('/products/', '');
         finalUrl = imageMapping[key] || fallbackImage;
       }
 
       let unitsSold = 0;
       let revenue = 0;
-      if (p.sales) {
-        for (const s of p.sales) {
-          unitsSold += (s.saleType === 'packet' ? s.quantity * p.packetSize : s.quantity);
+      if (record.sales) {
+        for (const s of record.sales) {
+          unitsSold += (s.saleType === 'packet' ? s.quantity * record.packetSize : s.quantity);
           revenue += s.totalAmount;
         }
       }
 
-      const { sales, ...productData } = p;
+      const { sales, ...productData } = record;
       return { ...productData, imageUrl: finalUrl, unitsSold, revenue };
     });
 

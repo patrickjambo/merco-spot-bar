@@ -13,24 +13,23 @@ export default async function DashboardPage() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Run sequentially to avoid 1-connection limits on local db
-  // 1. Get today's sales for THIS manager
-  const todaysSales = await prisma.sale.findMany({
-    where: {
-      createdAt: { gte: today },
-      status: "confirmed",
-      managerId: session?.userId as string 
-    },
-    include: {
-      product: true
-    },
-    orderBy: { createdAt: "desc" }
-  });
-  
-  // 2. Alert for low stock items
-  const lowStockProducts = await prisma.product.findMany({
-    where: { isActive: true },
-  });
+  // Run perfectly in parallel for maximum speed
+  const [todaysSales, lowStockProducts] = await Promise.all([
+    prisma.sale.findMany({
+      where: {
+        createdAt: { gte: today },
+        status: "confirmed",
+        managerId: session?.userId as string 
+      },
+      include: {
+        product: true
+      },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.product.findMany({
+      where: { isActive: true },
+    })
+  ]);
 
   const todayRevenue = todaysSales.reduce((acc: number, sale: any) => acc + sale.totalAmount, 0);
   const unitsSoldToday = todaysSales.reduce((acc: number, sale: any) => acc + sale.quantity, 0);

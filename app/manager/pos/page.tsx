@@ -167,13 +167,12 @@ function POSContent() {
         setCart([]);
         setIsCartOpenMobile(false);
         
-        const productsRes = await fetch("/api/products");
-        if (productsRes.ok) {
-          const freshData = await productsRes.json();
-          setProducts(freshData);
-        }
-        
         router.push("/manager/tables");
+
+        // Fire and forget refetching products
+        fetch("/api/products").then(async pRes => {
+          if (pRes.ok) setProducts(await pRes.json());
+        }).catch(() => {});
       } else {
         alert(`❌ Transaction Failed: ${data.error}`);
       }
