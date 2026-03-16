@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import LogoutButton from "@/app/components/LogoutButton";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 type Product = {
   id: string;
@@ -27,6 +27,7 @@ type CartItem = {
 
 function POSContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialTable = searchParams.get("table") || "1";
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -172,7 +173,7 @@ function POSContent() {
           setProducts(freshData);
         }
         
-        window.location.href = "/manager/tables";
+        router.push("/manager/tables");
       } else {
         alert(`❌ Transaction Failed: ${data.error}`);
       }
