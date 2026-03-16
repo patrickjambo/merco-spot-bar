@@ -34,11 +34,34 @@ export default async function AdminDashboardPage() {
   const allProducts = await prisma.product.findMany();
 
   // 3. Alerts
-  const unresolvedAlerts = await prisma.alert.findMany({
+  const allUnresolvedAlerts = await prisma.alert.findMany({
     where: { isResolved: false },
     orderBy: { createdAt: "desc" },
     include: { manager: true, product: true }
   });
+
+  // Auto-resolve 'low_stock' alerts if product stock is now above threshold
+  let resolvedIds: string[] = [];
+  try {
+    const alertsToResolve = allUnresolvedAlerts.filter((alert: any) => {
+      // Both "low_stock" and "LOW_STOCK" to be safe
+      return alert.alertType.toLowerCase() === "low_stock" && alert.product && alert.product.stockUnits > alert.product.minStockThreshold;
+    });
+
+    if (alertsToResolve.length > 0) {
+      resolvedIds = alertsToResolve.map((a: any) => a.id);
+      await prisma.alert.updateMany({
+        where: { id: { in: resolvedIds } },
+        data: { isResolved: true, resolvedAt: new Date() }
+      });
+    }
+  } catch (error) {
+    console.error("Auto-resolve alerts error:", error);
+  }
+
+  const unresolvedAlerts = allUnresolvedAlerts.filter(
+    (a: any) => !resolvedIds.includes(a.id)
+  );
 
   // 4. Managers
   const managers = await prisma.user.findMany({

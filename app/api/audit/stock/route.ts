@@ -70,6 +70,22 @@ export async function POST(request: Request) {
             description: `Stock for ${product.name} changed from ${product.stockUnits} to ${actualCount} by audit. Diff: ${diff}`
           }
         });
+
+        // Auto-resolve any low_stock alerts if stock is now sufficient
+        if (actualCount > product.minStockThreshold) {
+          await tx.alert.updateMany({
+            where: {
+              relatedProductId: productId,
+              alertType: 'low_stock',
+              isResolved: false
+            },
+            data: {
+              isResolved: true,
+              resolvedAt: new Date(),
+              resolvedBy: adminId
+            }
+          });
+        }
       }
 
       return await tx.product.findUnique({ where: { id: productId } });

@@ -21,6 +21,21 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
         imageUrl: body.imageUrl,
       },
     });
+
+    if (updatedProduct.stockUnits > updatedProduct.minStockThreshold) {
+      await prisma.alert.updateMany({
+        where: {
+          relatedProductId: params.id,
+          alertType: 'low_stock',
+          isResolved: false
+        },
+        data: {
+          isResolved: true,
+          resolvedAt: new Date()
+        }
+      });
+    }
+
     return NextResponse.json(updatedProduct);
   } catch (error) {
     console.error("Error updating product:", error);
