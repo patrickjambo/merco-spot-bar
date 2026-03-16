@@ -12,6 +12,7 @@ export async function middleware(request: NextRequest) {
   // Public routes that don't need authentication
   if (
     request.nextUrl.pathname === '/' || 
+    request.nextUrl.pathname.startsWith('/menu') ||
     request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/api/auth') ||
     request.nextUrl.pathname.startsWith('/api/seed') ||
