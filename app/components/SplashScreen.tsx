@@ -8,13 +8,6 @@ export default function SplashScreen() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    // Only show splash screen once per session
-    if (sessionStorage.getItem('splash_seen')) {
-      setShow(false);
-      return;
-    }
-    sessionStorage.setItem('splash_seen', 'true');
-
     // Canvas Fireworks "Advanced Technology"
     const canvas = canvasRef.current;
     if (!canvas) return;
