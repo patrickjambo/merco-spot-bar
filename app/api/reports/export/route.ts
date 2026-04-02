@@ -405,27 +405,44 @@ export async function GET(req: Request) {
       // If multiple sections, summary table
       if (sections.length > 1) {
         currentRow += 1;
-        sheet.mergeCells(`A${currentRow}:B${currentRow}`);
+        sheet.mergeCells(`A${currentRow}:D${currentRow}`);
         sheet.getCell(`A${currentRow}`).value = 'Summary Total Revenue';
         sheet.getCell(`A${currentRow}`).font = { bold: true, size: 16, name: 'Times New Roman' };
         currentRow++;
 
         for (let i = 0; i < sections.length; i++) {
-            const sumRow = sheet.getRow(currentRow);
-            sumRow.values = [sections[i].title, fmtMoney(sections[i].total) + ' RWF'];
-            sumRow.getCell(1).border = headerStyle.border;
-            sumRow.getCell(2).border = headerStyle.border;
-            sumRow.getCell(1).font = { name: 'Times New Roman', size: 12 };
-            sumRow.getCell(2).font = { name: 'Times New Roman', size: 12, bold: true };
+            sheet.mergeCells(`A${currentRow}:C${currentRow}`);
+            const titleCell = sheet.getCell(`A${currentRow}`);
+            titleCell.value = sections[i].title;
+            titleCell.font = { name: 'Times New Roman', size: 12 };
+            sheet.getCell(`A${currentRow}`).border = headerStyle.border;
+            sheet.getCell(`B${currentRow}`).border = headerStyle.border;
+            sheet.getCell(`C${currentRow}`).border = headerStyle.border;
+
+            sheet.mergeCells(`D${currentRow}:E${currentRow}`);
+            const valCell = sheet.getCell(`D${currentRow}`);
+            valCell.value = fmtMoney(sections[i].total) + ' RWF';
+            valCell.font = { name: 'Times New Roman', size: 12, bold: true };
+            sheet.getCell(`D${currentRow}`).border = headerStyle.border;
+            sheet.getCell(`E${currentRow}`).border = headerStyle.border;
+            
             currentRow++;
         }
         
-        const sumFootRow = sheet.getRow(currentRow);
-        sumFootRow.values = ['Grand Total Revenue', fmtMoney(grandTotal) + ' RWF'];
-        sumFootRow.getCell(1).border = headerStyle.border;
-        sumFootRow.getCell(2).border = headerStyle.border;
-        sumFootRow.getCell(1).font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F5132' } };
-        sumFootRow.getCell(2).font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F5132' } };
+        sheet.mergeCells(`A${currentRow}:C${currentRow}`);
+        const grandTitleCell = sheet.getCell(`A${currentRow}`);
+        grandTitleCell.value = 'Grand Total Revenue';
+        grandTitleCell.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F5132' } };
+        sheet.getCell(`A${currentRow}`).border = headerStyle.border;
+        sheet.getCell(`B${currentRow}`).border = headerStyle.border;
+        sheet.getCell(`C${currentRow}`).border = headerStyle.border;
+
+        sheet.mergeCells(`D${currentRow}:E${currentRow}`);
+        const grandValCell = sheet.getCell(`D${currentRow}`);
+        grandValCell.value = fmtMoney(grandTotal) + ' RWF';
+        grandValCell.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F5132' } };
+        sheet.getCell(`D${currentRow}`).border = headerStyle.border;
+        sheet.getCell(`E${currentRow}`).border = headerStyle.border;
       }
 
       // Set columns width
