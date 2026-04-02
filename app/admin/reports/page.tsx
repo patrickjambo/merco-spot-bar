@@ -29,7 +29,7 @@ export default function ReportsPage() {
   };
 
   const handleExportCSV = () => {
-    window.location.href = `/api/reports/export?range=${range}&type=csv`;
+    window.location.href = `/api/reports/export?range=${range}&type=excel`;
   };
 
   const handleExportPDF = () => {
