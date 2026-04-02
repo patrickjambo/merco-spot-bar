@@ -3,6 +3,7 @@ import { getPrisma } from '@/lib/prisma';
 import { verifySession } from '@/lib/auth';
 import path from 'path';
 import { readFile } from 'fs/promises';
+import ExcelJS from 'exceljs';
 
 type SaleRow = {
   createdAt: Date;
@@ -282,87 +283,177 @@ export async function GET(req: Request) {
       const typedSales = sales as SaleRow[];
       const { sections, reportLabel } = buildSectionsForRange(range, typedSales, now);
       const grandTotal = sections.reduce((acc, s) => acc + s.total, 0);
-      const logoDataUri = await getLogoDataUri();
 
-      const htmlSections = sections.map((section) => renderSalesTable(section)).join('');
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Report');
 
-      let summaryHtml = '';
-      if (range === 'week') {
-        summaryHtml = renderSummaryTable(
-          'Weekly Summary (Day by Day)',
-          sections.map((s, i) => ({ label: `Day ${i + 1}`, amount: s.total })),
-          'Weekly Total'
-        );
-      } else if (range === 'month') {
-        summaryHtml = renderSummaryTable(
-          'Monthly Summary (Week by Week)',
-          sections.map((s, i) => ({ label: `Week ${i + 1}`, amount: s.total })),
-          'Monthly Total'
-        );
-      } else if (range === 'year') {
-        summaryHtml = renderSummaryTable(
-          'Yearly Summary (Month by Month)',
-          sections.map((s) => ({ label: s.title.replace(' report', ''), amount: s.total })),
-          'Yearly Total'
-        );
+      // Add logo
+      try {
+        const logoPath = path.join(process.cwd(), 'public', 'logo.png');
+        const logoBuffer = await readFile(logoPath);
+        const imageId = workbook.addImage({
+          buffer: logoBuffer as any,
+          extension: 'png',
+        });
+        sheet.addImage(imageId, 'A1:B3');
+      } catch (err) {
+        // Logo failure shouldn't fail the export
       }
 
-      const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <style>
-    body { font-family: Arial, sans-serif; color: #111; margin: 12px; }
-    .header { text-align: center; margin-bottom: 16px; }
-    .logo { width: 84px; height: 84px; object-fit: contain; margin-bottom: 4px; }
-    h1 { margin: 0; font-size: 24px; font-weight: 800; }
-    h2 { margin: 6px 0 0; font-size: 18px; font-weight: 700; }
-    .section { margin: 22px 0; }
-    .section h3 { text-align: center; margin: 0 0 8px; font-size: 30px; font-weight: 800; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #b5b5b5; padding: 6px 8px; font-size: 12px; }
-    th { background: #3b2b1a; color: #fff; font-size: 13px; }
-    td.num { text-align: right; font-weight: 700; }
-    td.empty { text-align: center; color: #666; padding: 10px; }
-    .section-total, .grand-total {
-      text-align: right;
-      font-size: 15px;
-      font-weight: 800;
-      margin-top: 8px;
-    }
-    .summary-wrap { margin: 20px 0 8px; }
-    .summary-wrap h4 { margin: 0 0 8px; font-size: 18px; }
-    .summary-table { width: 50%; min-width: 360px; border-collapse: collapse; margin-left: auto; }
-    .summary-total { text-align: right; font-size: 16px; font-weight: 800; margin-top: 6px; }
-    .grand-total { margin-top: 18px; font-size: 18px; color: #0f5132; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    ${logoDataUri ? `<img class="logo" src="${logoDataUri}" alt="Merco Spot logo" />` : ''}
-    <h1>Merco Spot Bar and Grill Report</h1>
-    <h2>${escapeHtml(reportLabel)}</h2>
-  </div>
+      // Main header text "Merco Spot Bar and Grill Report"
+      sheet.mergeCells('B1:G1');
+      sheet.getCell('B1').value = 'Merco Spot Bar and Grill Report';
+      sheet.getCell('B1').font = { size: 24, bold: true, name: 'Times New Roman' };
+      sheet.getCell('B1').alignment = { vertical: 'middle', horizontal: 'left' };
+      
+      // Blank rows to clear space for the logo
+      sheet.getRow(2).height = 20;
+      sheet.getRow(3).height = 20;
+      
+      // Dynamic overall heading
+      sheet.mergeCells('A4:G4');
+      sheet.getCell('A4').value = reportLabel;
+      sheet.getCell('A4').font = { size: 16, bold: true, name: 'Times New Roman' };
+      sheet.getCell('A4').alignment = { vertical: 'middle', horizontal: 'left' };
+      sheet.getRow(5).height = 15; // blank spacing
 
-  ${htmlSections}
-  ${summaryHtml}
+      let currentRow = 6;
+      const headerStyle = {
+        font: { bold: true, size: 12, name: 'Times New Roman' },
+        border: {
+          top: { style: 'thin' as const },
+          left: { style: 'thin' as const },
+          bottom: { style: 'thin' as const },
+          right: { style: 'thin' as const }
+        },
+        alignment: { horizontal: 'center' as const, vertical: 'middle' as const },
+      };
 
-  <div class="grand-total">Grand Total Revenue: ${fmtMoney(grandTotal)} RWF</div>
-</body>
-</html>`;
+      for (const section of sections) {
+        // Section title
+        sheet.mergeCells(`A${currentRow}:G${currentRow}`);
+        sheet.getCell(`A${currentRow}`).value = section.title;
+        sheet.getCell(`A${currentRow}`).font = { size: 14, bold: true, name: 'Times New Roman' };
+        currentRow++;
+
+        // Table Headers
+        const headerRow = sheet.getRow(currentRow);
+        headerRow.values = [
+          'Date', 'Time', 'Product Name', 'Category', 'Quantity', 'Unit Price (RWF)', 'Total Revenue (RWF)', 'Manager'
+        ];
+        headerRow.eachCell((cell) => {
+          cell.font = headerStyle.font;
+          cell.border = headerStyle.border;
+          cell.alignment = headerStyle.alignment;
+          // optional background color inside cell
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFE6E6E6' }
+          };
+        });
+        currentRow++;
+
+        // Rows
+        for (const s of section.sales) {
+          const dt = new Date(s.createdAt);
+          const manager = s.manager?.fullName || 'Unknown';
+          const unitPrice = s.unitPriceAtSale || s.product.pricePerUnit || 0;
+          
+          const rowData = sheet.getRow(currentRow);
+          rowData.values = [
+            fmtDate(dt),
+            fmtTime(dt),
+            s.product.name,
+            s.product.category || 'Uncategorized',
+            s.quantity,
+            unitPrice,
+            s.totalAmount,
+            manager
+          ];
+          
+          rowData.eachCell((cell, colNumber) => {
+            cell.font = { name: 'Times New Roman', size: 11 };
+            cell.border = headerStyle.border;
+            if (colNumber >= 5 && colNumber <= 7) {
+              cell.alignment = { horizontal: 'right', vertical: 'middle' };
+            }
+          });
+          currentRow++;
+        }
+
+        // Section Total
+        if (section.sales.length === 0) {
+          sheet.mergeCells(`A${currentRow}:H${currentRow}`);
+          const cell = sheet.getCell(`A${currentRow}`);
+          cell.value = 'No sales for this period';
+          cell.alignment = { horizontal: 'center' };
+          cell.border = headerStyle.border;
+          currentRow++;
+        }
+
+        const footRow = sheet.getRow(currentRow);
+        sheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        footRow.getCell(1).value = `${section.title} Total: ${fmtMoney(section.total)} RWF`;
+        footRow.getCell(1).font = { bold: true, name: 'Times New Roman', size: 12 };
+        if (sections.length === 1) {
+             footRow.getCell(5).value = `Grand Total Revenue: ${fmtMoney(grandTotal)} RWF`;
+             footRow.getCell(5).font = { bold: true, name: 'Times New Roman', size: 12 };
+             sheet.mergeCells(`E${currentRow}:H${currentRow}`);
+        }
+        currentRow += 2; // spacing
+      }
+
+      // If multiple sections, summary table
+      if (sections.length > 1) {
+        currentRow += 1;
+        sheet.mergeCells(`A${currentRow}:B${currentRow}`);
+        sheet.getCell(`A${currentRow}`).value = 'Summary Total Revenue';
+        sheet.getCell(`A${currentRow}`).font = { bold: true, size: 16, name: 'Times New Roman' };
+        currentRow++;
+
+        for (let i = 0; i < sections.length; i++) {
+            const sumRow = sheet.getRow(currentRow);
+            sumRow.values = [sections[i].title, fmtMoney(sections[i].total) + ' RWF'];
+            sumRow.getCell(1).border = headerStyle.border;
+            sumRow.getCell(2).border = headerStyle.border;
+            sumRow.getCell(1).font = { name: 'Times New Roman', size: 12 };
+            sumRow.getCell(2).font = { name: 'Times New Roman', size: 12, bold: true };
+            currentRow++;
+        }
+        
+        const sumFootRow = sheet.getRow(currentRow);
+        sumFootRow.values = ['Grand Total Revenue', fmtMoney(grandTotal) + ' RWF'];
+        sumFootRow.getCell(1).border = headerStyle.border;
+        sumFootRow.getCell(2).border = headerStyle.border;
+        sumFootRow.getCell(1).font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F5132' } };
+        sumFootRow.getCell(2).font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F5132' } };
+      }
+
+      // Set columns width
+      sheet.columns = [
+        { width: 13 }, // Date
+        { width: 13 }, // Time
+        { width: 30 }, // Product
+        { width: 20 }, // Category
+        { width: 10 }, // Quantity
+        { width: 15 }, // Unit Price
+        { width: 22 }, // Total Revenue
+        { width: 20 }, // Manager
+      ];
+
+      const buffer = await workbook.xlsx.writeBuffer();
 
       const fileDate = new Intl.DateTimeFormat('en-CA').format(now);
-      return new NextResponse(html, {
+      return new NextResponse(buffer, {
         headers: {
-          'Content-Type': 'application/vnd.ms-excel; charset=utf-8',
-          'Content-Disposition': `attachment; filename="financial_report_${range}_${fileDate}.xls"`,
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="financial_report_${range}_${fileDate}.xlsx"`,
         }
       });
     }
 
     return NextResponse.json({ error: 'Unsupported format' }, { status: 400 });
-
   } catch (error) {
     console.error('Export error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
