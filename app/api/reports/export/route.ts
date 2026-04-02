@@ -375,9 +375,7 @@ export async function GET(req: Request) {
           rowData.eachCell((cell, colNumber) => {
             cell.font = { name: 'Times New Roman', size: 11 };
             cell.border = headerStyle.border;
-            if (colNumber >= 5 && colNumber <= 7) {
-              cell.alignment = { horizontal: 'right', vertical: 'middle' };
-            }
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
           });
           currentRow++;
         }
@@ -432,14 +430,14 @@ export async function GET(req: Request) {
 
       // Set columns width
       sheet.columns = [
-        { width: 13 }, // Date
-        { width: 13 }, // Time
-        { width: 30 }, // Product
-        { width: 20 }, // Category
-        { width: 10 }, // Quantity
-        { width: 15 }, // Unit Price
-        { width: 22 }, // Total Revenue
-        { width: 20 }, // Manager
+        { width: 15 }, // Date
+        { width: 16 }, // Time
+        { width: 35 }, // Product
+        { width: 30 }, // Category
+        { width: 12 }, // Quantity
+        { width: 22 }, // Unit Price
+        { width: 28 }, // Total Revenue
+        { width: 30 }, // Manager
       ];
 
       const buffer = await workbook.xlsx.writeBuffer();
