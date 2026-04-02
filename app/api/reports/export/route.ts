@@ -193,19 +193,27 @@ function buildSectionsForRange(range: string, sales: SaleRow[], now: Date) {
   }
 
   if (range === 'month') {
-    const monthStart = startOfDay(addDays(today, -27));
+    const monthStart = startOfDay(addDays(today, -29));
     const sections: Section[] = [];
-    for (let i = 0; i < 4; i++) {
-      const weekStart = startOfDay(addDays(monthStart, i * 7));
-      const weekEnd = endOfDay(addDays(weekStart, 6));
+    let weekIndex = 1;
+    let cursor = startOfDay(monthStart);
+
+    while (cursor.getTime() <= today.getTime()) {
+      const weekStart = startOfDay(cursor);
+      const rawWeekEnd = endOfDay(addDays(weekStart, 6));
+      const weekEnd = rawWeekEnd.getTime() > endOfDay(today).getTime() ? endOfDay(today) : rawWeekEnd;
+
       sections.push(
         makeSection(
-          `Week ${i + 1} report (${fmtDate(weekStart)} - ${fmtDate(weekEnd)})`,
+          `Week ${weekIndex} report (${fmtDate(weekStart)} - ${fmtDate(weekEnd)})`,
           weekStart,
           weekEnd,
           sales
         )
       );
+
+      cursor = addDays(weekStart, 7);
+      weekIndex += 1;
     }
     return { sections, reportLabel: `Monthly report (${fmtDate(monthStart)} - ${fmtDate(today)})` };
   }
@@ -249,7 +257,7 @@ export async function GET(req: Request) {
       startDate = startOfDay(addDays(now, -6));
       endDate = endOfDay(now);
     } else if (range === 'month') {
-      startDate = startOfDay(addDays(now, -27));
+      startDate = startOfDay(addDays(now, -29));
       endDate = endOfDay(now);
     } else if (range === 'year') {
       startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
