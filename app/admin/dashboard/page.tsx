@@ -23,17 +23,19 @@ export default async function AdminDashboardPage() {
         createdAt: { gte: today },
         status: "confirmed"
       },
+      // Only the fields actually rendered — avoids dragging base64 product images.
       include: {
-        product: true,
-        manager: true
+        product: { select: { name: true, packetSize: true } },
+        manager: { select: { fullName: true } }
       },
       orderBy: { createdAt: "desc" }
     }),
-    prisma.product.findMany(),
+    prisma.product.findMany({ select: { stockUnits: true, pricePerUnit: true } }),
     prisma.alert.findMany({
       where: { isResolved: false },
       orderBy: { createdAt: "desc" },
-      include: { manager: true, product: true }
+      // manager relation is unused here; product only needs stock fields for auto-resolve.
+      include: { product: { select: { stockUnits: true, minStockThreshold: true } } }
     }),
     prisma.user.findMany({
       where: { role: "manager", isDeleted: false },

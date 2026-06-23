@@ -12,7 +12,16 @@ export async function GET(request: Request) {
     }
     
     const products = await prisma.product.findMany({
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
+      // Only fields the audit screen renders — skips the base64 image blob.
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        packetSize: true,
+        stockUnits: true,
+        minStockThreshold: true,
+      }
     });
     return NextResponse.json(products);
   } catch (error) {

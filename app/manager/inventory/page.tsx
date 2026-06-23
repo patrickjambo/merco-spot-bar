@@ -15,7 +15,18 @@ export default async function ManagerInventoryPage() {
   // Fetch all products
   const products = await prisma.product.findMany({
     where: { isActive: true },
-    orderBy: { name: 'asc' }
+    orderBy: { name: 'asc' },
+    // Select only displayed fields — excludes the base64 image blob for faster loads.
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      pricePerUnit: true,
+      pricePerPacket: true,
+      packetSize: true,
+      stockUnits: true,
+      minStockThreshold: true,
+    }
   });
 
   // Fetch today's sales for THIS manager
