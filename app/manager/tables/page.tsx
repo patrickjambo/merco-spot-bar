@@ -80,6 +80,25 @@ export default function ManagerTablesPage() {
     localStorage.setItem("merico_tables", JSON.stringify(newTables));
   };
 
+  const deleteTable = (id: string) => {
+    const target = tables.find(t => t.id === id);
+    if (!target) return;
+
+    // Warn before removing a table/person that still has an unpaid open bill,
+    // so a paying customer is never deleted by mistake.
+    const hasOpenBill = target.status === "OCCUPIED" && target.totalBill > 0;
+    const confirmMsg = hasOpenBill
+      ? `"${target.name}" still has an open bill of ${target.totalBill.toLocaleString()} RWF.\nMake sure the customer has paid before removing.\n\nRemove anyway?`
+      : `Remove "${target.name}"? This cannot be undone.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    const newTables = tables.filter(t => t.id !== id);
+    setTables(newTables);
+    localStorage.setItem("merico_tables", JSON.stringify(newTables));
+    if (selectedTable?.id === id) setSelectedTable(null);
+  };
+
   const getStatusColor = (status: TableStatus) => {
     switch (status) {
       case "FREE": return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800";
@@ -174,6 +193,13 @@ export default function ManagerTablesPage() {
                    <button onClick={() => updateTable(selectedTable.id, { status: "OCCUPIED", guests: selectedTable.guests || 2 })} className="flex-1 py-2 text-xs font-bold rounded bg-red-100 hover:bg-red-200 text-red-800 transition-colors">Set Occupied</button>
                    <button onClick={() => updateTable(selectedTable.id, { status: "RESERVED" })} className="flex-1 py-2 text-xs font-bold rounded bg-amber-100 hover:bg-amber-200 text-amber-800 transition-colors">Set Reserved</button>
                 </div>
+                <button
+                  onClick={() => deleteTable(selectedTable.id)}
+                  className="w-full mt-3 py-2 text-xs font-bold rounded bg-zinc-100 hover:bg-red-100 dark:bg-zinc-800 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 border border-zinc-200 dark:border-zinc-700 hover:border-red-300 dark:hover:border-red-800 flex items-center justify-center gap-2 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  Remove Table
+                </button>
               </div>
 
               {selectedTable.status !== "FREE" && selectedTable.status !== "RESERVED" && (
