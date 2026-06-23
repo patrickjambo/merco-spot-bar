@@ -96,6 +96,11 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
   }, []);
 
   const addToCart = (product: Product, saleType: "unit" | "packet") => {
+    // Block adding more than what is physically left (live stock minus what is already
+    // reserved in the cart). Real stock is only deducted on Confirm & Send Order.
+    const needed = saleType === "packet" ? product.packetSize : 1;
+    if (remainingFor(product) < needed) return;
+
     setCart((prev) => {
       const price = saleType === "packet" ? product.pricePerPacket : product.pricePerUnit;
       const cartItemId = `${product.id}-${saleType}`;
@@ -127,6 +132,51 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
   };
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // --- Live stock reservation -------------------------------------------------
+  // Single units (bottles) currently held in the cart for a product. A packet line
+  // reserves quantity * packetSize single units.
+  const reservedUnitsFor = (productId: string) => {
+    const product = products.find((p) => p.id === productId);
+    const packetSize = product?.packetSize || 1;
+    return cart.reduce((sum, c) => {
+      if (c.productId !== productId) return sum;
+      return sum + (c.saleType === "packet" ? c.quantity * packetSize : c.quantity);
+    }, 0);
+  };
+
+  // What the cashier can still sell right now = real stock minus what is in the cart.
+  // This is only a visual reservation — the database is untouched until checkout.
+  const remainingFor = (product: Product) => product.stockUnits - reservedUnitsFor(product.id);
+
+  // Increase/decrease a cart line. Increasing respects remaining stock; dropping to
+  // zero removes the line, which returns that stock to the live "left" count.
+  const updateCartQty = (cartItemId: string, delta: number) => {
+    setCart((prev) => {
+      const item = prev.find((c) => c.id === cartItemId);
+      if (!item) return prev;
+
+      if (delta > 0) {
+        const product = products.find((p) => p.id === item.productId);
+        if (product) {
+          const packetSize = product.packetSize || 1;
+          const reserved = prev.reduce(
+            (sum, c) =>
+              c.productId === item.productId
+                ? sum + (c.saleType === "packet" ? c.quantity * packetSize : c.quantity)
+                : sum,
+            0
+          );
+          const needed = item.saleType === "packet" ? packetSize : 1;
+          if (product.stockUnits - reserved < needed) return prev; // nothing left to add
+        }
+      }
+
+      const newQty = item.quantity + delta;
+      if (newQty <= 0) return prev.filter((c) => c.id !== cartItemId);
+      return prev.map((c) => (c.id === cartItemId ? { ...c, quantity: newQty } : c));
+    });
+  };
 
   const handleSendOrder = async () => {
     if (cart.length === 0) return alert("Cart is empty!");
@@ -239,9 +289,26 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
       <div className="flex flex-1 overflow-hidden min-h-0 relative">
         {/* Left Side: Menu Selection */}
         <div className="flex-1 flex flex-col pt-3 lg:pt-4 overflow-hidden w-full lg:w-auto">
-          {/* Categories Horizontal Scroll */}
-          <div className="flex overflow-x-auto lg:flex-wrap gap-2 px-3 lg:px-6 mb-3 shrink-0 hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <style dangerouslySetInnerHTML={{ __html: `.hide-scrollbar::-webkit-scrollbar { display: none; }` }} />
+          {/* Mobile: top order summary — pinned above the product list so the cashier can
+              see the running order and open it to review/checkout while still browsing. */}
+          {cart.length > 0 && (
+            <button
+              onClick={() => setIsCartOpenMobile(true)}
+              className="lg:hidden flex items-center justify-between gap-3 mx-3 mb-3 px-4 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-800 text-white border-2 border-yellow-500 shrink-0 active:scale-[0.99] transition-transform"
+            >
+              <div className="flex items-center gap-2">
+                <span className="bg-yellow-500 text-zinc-900 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">
+                  {cart.reduce((s, i) => s + i.quantity, 0)}
+                </span>
+                <span className="font-bold text-sm">View Order</span>
+              </div>
+              <span className="text-yellow-400 font-bold text-sm">{total.toLocaleString()} RWF</span>
+            </button>
+          )}
+
+          {/* Categories — wrap onto multiple rows so every category is visible on mobile
+              (no horizontal scrolling); flows down in rows above the product grid. */}
+          <div className="flex flex-wrap gap-2 px-3 lg:px-6 mb-3 shrink-0">
             {categories.map((cat) => (
               <button
                 key={cat}
@@ -258,9 +325,12 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
           </div>
 
           {/* Menu Items Grid */}
-          <div className={`flex-1 overflow-y-auto px-3 lg:px-6 pb-24 lg:pb-6 ${isCartOpenMobile ? 'hidden lg:block' : 'block'}`}>
+          <div className={`flex-1 overflow-y-auto px-3 lg:px-6 pb-6 ${isCartOpenMobile ? 'hidden lg:block' : 'block'}`}>
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
-              {filteredProducts.map((item) => (
+              {filteredProducts.map((item) => {
+                const remaining = remainingFor(item);
+                const soldOut = remaining <= 0;
+                return (
                 <div
                   key={item.id}
                   className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 lg:p-4 flex flex-col justify-between gap-2 shadow-sm hover:shadow-md transition-all h-[150px] lg:h-[180px]"
@@ -273,8 +343,8 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
                        </span>
                     </div>
                     <div className="text-right flex flex-col items-end shrink-0">
-                      <span className={`text-[10px] lg:text-xs font-bold px-1.5 py-0.5 rounded-md ${item.stockUnits <= item.minStockThreshold ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {item.stockUnits} left
+                      <span className={`text-[10px] lg:text-xs font-bold px-1.5 py-0.5 rounded-md ${soldOut ? 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400' : remaining <= item.minStockThreshold ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                        {soldOut ? 'Sold out' : `${remaining} left`}
                       </span>
                     </div>
                   </div>
@@ -282,7 +352,8 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
                   <div className="flex flex-col gap-1.5 w-full mt-auto mb-0.5">
                     <button
                       onClick={() => addToCart(item, 'unit')}
-                      className="w-full py-1.5 lg:py-2 flex justify-between items-center px-2 lg:px-4 bg-zinc-100 hover:bg-yellow-100 dark:bg-zinc-800 dark:hover:bg-yellow-900/40 text-zinc-800 dark:text-zinc-200 font-bold rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
+                      disabled={remaining < 1}
+                      className={`w-full py-1.5 lg:py-2 flex justify-between items-center px-2 lg:px-4 font-bold rounded-lg border transition-colors ${remaining < 1 ? 'bg-zinc-50 dark:bg-zinc-800/40 text-zinc-300 dark:text-zinc-600 border-zinc-100 dark:border-zinc-800 cursor-not-allowed' : 'bg-zinc-100 hover:bg-yellow-100 dark:bg-zinc-800 dark:hover:bg-yellow-900/40 text-zinc-800 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700'}`}
                     >
                       <span className="text-[10px] lg:text-xs uppercase tracking-wider">Add Unit</span>
                       <span className="text-xs lg:text-sm">{item.pricePerUnit.toLocaleString()}</span>
@@ -290,7 +361,8 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
                     {item.packetSize > 1 && (
                       <button
                         onClick={() => addToCart(item, 'packet')}
-                        className="w-full py-1.5 lg:py-2 flex justify-between items-center px-2 lg:px-4 bg-zinc-100 hover:bg-yellow-100 dark:bg-zinc-800 dark:hover:bg-yellow-900/40 text-zinc-800 dark:text-zinc-200 font-bold rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
+                        disabled={remaining < item.packetSize}
+                        className={`w-full py-1.5 lg:py-2 flex justify-between items-center px-2 lg:px-4 font-bold rounded-lg border transition-colors ${remaining < item.packetSize ? 'bg-zinc-50 dark:bg-zinc-800/40 text-zinc-300 dark:text-zinc-600 border-zinc-100 dark:border-zinc-800 cursor-not-allowed' : 'bg-zinc-100 hover:bg-yellow-100 dark:bg-zinc-800 dark:hover:bg-yellow-900/40 text-zinc-800 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700'}`}
                       >
                         <span className="text-[10px] lg:text-xs uppercase tracking-wider">Add Pack</span>
                         <span className="text-xs lg:text-sm">{item.pricePerPacket.toLocaleString()}</span>
@@ -298,7 +370,8 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
 
               {filteredProducts.length === 0 && (
                 <div className="col-span-full py-12 text-center text-zinc-500">
@@ -346,9 +419,23 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
                     <p className="text-zinc-500 text-[11px] lg:text-xs">{item.price.toLocaleString()} RWF / ea</p>
                   </div>
                   <div className="flex items-center gap-2 lg:gap-3 justify-end shrink-0">
-                    <span className="font-bold px-2 py-1 lg:px-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-xs">
-                      x{item.quantity}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => updateCartQty(item.id, -1)}
+                        className="w-7 h-7 flex items-center justify-center rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+                        title="Reduce quantity"
+                      >
+                        &minus;
+                      </button>
+                      <span className="font-bold w-6 text-center text-xs">{item.quantity}</span>
+                      <button
+                        onClick={() => updateCartQty(item.id, 1)}
+                        className="w-7 h-7 flex items-center justify-center rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+                        title="Add one more"
+                      >
+                        +
+                      </button>
+                    </div>
                     <p className="font-bold w-[65px] lg:w-[75px] text-right text-zinc-900 dark:text-yellow-500 text-[13px] lg:text-sm">
                       {(item.price * item.quantity).toLocaleString()}
                     </p>
@@ -402,24 +489,6 @@ function POSContent({ initialProducts }: { initialProducts: Product[] }) {
         </div>
       </div>
 
-      {/* Floating View Cart Button on Mobile — stays visible while browsing the menu so the
-          cashier can keep adding products, then tap to review & confirm the order. */}
-      {!isCartOpenMobile && cart.length > 0 && (
-        <div className="absolute left-4 right-4 lg:hidden z-20 bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-          <button
-            onClick={() => setIsCartOpenMobile(true)}
-            className="w-full bg-zinc-900 border-2 border-yellow-500 text-white p-4 rounded-xl shadow-2xl font-bold flex justify-between items-center active:scale-[0.98] transition-transform"
-          >
-            <div className="flex items-center gap-2">
-              <span className="bg-yellow-500 text-zinc-900 w-6 h-6 rounded-full flex items-center justify-center text-xs">
-                {cart.reduce((s, i) => s + i.quantity, 0)}
-              </span>
-              <span>View Order</span>
-            </div>
-            <span className="text-yellow-400">{total.toLocaleString()} RWF &rarr;</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
