@@ -23,7 +23,7 @@ export default async function AdminDashboardPage() {
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
   // Run queries perfectly in parallel for maximum speed
-  const [todaysSales, allProducts, allUnresolvedAlerts, managers, weekSales, pendingSales] = await Promise.all([
+  const [todaysSales, allProducts, allUnresolvedAlerts, managers, weekSales, pendingSales, shiftReports] = await Promise.all([
     prisma.sale.findMany({
       where: {
         createdAt: { gte: today },
@@ -60,6 +60,12 @@ export default async function AdminDashboardPage() {
         product: { select: { name: true, stockUnits: true, packetSize: true } },
         manager: { select: { fullName: true } }
       }
+    }),
+    // Recent shift cash reconciliations for owner visibility.
+    prisma.auditLog.findMany({
+      where: { actionType: "shift_close" },
+      orderBy: { createdAt: "desc" },
+      take: 8,
     })
   ]);
 
@@ -244,6 +250,25 @@ export default async function AdminDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <BarChart title="Today's Revenue by Hour" data={hourly} accent="bg-green-500" />
         <BarChart title="Last 7 Days" data={daily} accent="bg-purple-500" />
+      </div>
+
+      {/* Recent shift cash reports */}
+      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 mt-6">
+        <h2 className="text-xl font-bold mb-4">Recent Shift Reports</h2>
+        {shiftReports.length === 0 ? (
+          <p className="text-sm text-zinc-500">No shifts have been closed yet.</p>
+        ) : (
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            {shiftReports.map((r: any) => (
+              <div key={r.id} className="flex justify-between items-start gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
+                <p className="text-sm text-zinc-700 dark:text-zinc-300">{r.description}</p>
+                <span className="text-xs text-zinc-400 whitespace-nowrap">
+                  {new Date(r.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Admin Quick Actions */}

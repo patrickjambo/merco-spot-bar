@@ -3,6 +3,8 @@ import LogoutButton from "@/app/components/LogoutButton";
 import { getPrisma } from "@/lib/prisma";
 import { verifySession } from "@/lib/auth";
 import AutoRefresh from "@/app/components/AutoRefresh";
+import CloseShiftCard from "./components/CloseShiftCard";
+import OpenTablesSummary from "./components/OpenTablesSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -19,23 +21,26 @@ export default async function DashboardPage() {
       where: {
         createdAt: { gte: today },
         status: "confirmed",
-        managerId: session?.userId as string 
+        managerId: session?.userId as string
       },
+      // Only the rendered fields — avoids pulling base64 product images.
       include: {
-        product: true
+        product: { select: { name: true, pricePerUnit: true } }
       },
       orderBy: { createdAt: "desc" }
     }),
     prisma.product.findMany({
       where: { isActive: true },
+      select: { name: true, stockUnits: true, minStockThreshold: true },
     })
   ]);
 
   const todayRevenue = todaysSales.reduce((acc: number, sale: any) => acc + sale.totalAmount, 0);
   const unitsSoldToday = todaysSales.reduce((acc: number, sale: any) => acc + sale.quantity, 0);
-  
+
   // Compute low stock items
-  const lowStockCount = lowStockProducts.filter(p => p.stockUnits <= p.minStockThreshold).length;
+  const lowStockItems = lowStockProducts.filter((p: any) => p.stockUnits <= p.minStockThreshold);
+  const lowStockCount = lowStockItems.length;
 
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 p-6 border-t border-zinc-200 dark:border-zinc-800">
@@ -73,6 +78,27 @@ export default async function DashboardPage() {
             <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Shift, tables & stock at a glance */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <CloseShiftCard />
+        <OpenTablesSummary />
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 flex flex-col">
+          <h2 className="text-xl font-bold mb-4">Low Stock</h2>
+          <div className="flex-1 space-y-2 max-h-40 overflow-y-auto pr-1">
+            {lowStockItems.length === 0 ? (
+              <p className="text-sm text-zinc-500 text-center py-4">All items are above their thresholds.</p>
+            ) : (
+              lowStockItems.map((p: any, i: number) => (
+                <div key={i} className="flex justify-between items-center p-2 rounded-lg bg-red-50 dark:bg-red-900/10">
+                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate pr-2">{p.name}</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded ${p.stockUnits === 0 ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>{p.stockUnits} left</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
