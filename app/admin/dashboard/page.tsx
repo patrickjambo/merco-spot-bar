@@ -4,6 +4,8 @@ import { getPrisma } from "@/lib/prisma";
 import { verifySession } from "@/lib/auth";
 import AlertCard from "./components/AlertCard";
 import ManagerList from "./components/ManagerList";
+import ApprovalsPanel from "./components/ApprovalsPanel";
+import BarChart from "./components/BarChart";
 import AutoRefresh from "@/app/components/AutoRefresh";
 
 // This makes the page dynamically render on every request instead of being statically cached
@@ -16,8 +18,12 @@ export default async function AdminDashboardPage() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
   // Run queries perfectly in parallel for maximum speed
-  const [todaysSales, allProducts, allUnresolvedAlerts, managers] = await Promise.all([
+  const [todaysSales, allProducts, allUnresolvedAlerts, managers, weekSales, pendingSales] = await Promise.all([
     prisma.sale.findMany({
       where: {
         createdAt: { gte: today },
@@ -40,8 +46,46 @@ export default async function AdminDashboardPage() {
     prisma.user.findMany({
       where: { role: "manager", isDeleted: false },
       select: { id: true, fullName: true, role: true, lastLogin: true }
+    }),
+    // Tiny payload (2 columns) for the 7-day revenue trend chart.
+    prisma.sale.findMany({
+      where: { status: "confirmed", createdAt: { gte: sevenDaysAgo } },
+      select: { createdAt: true, totalAmount: true }
+    }),
+    // Sales the anomaly engine parked for owner approval.
+    prisma.sale.findMany({
+      where: { status: "pending_approval" },
+      orderBy: { createdAt: "desc" },
+      include: {
+        product: { select: { name: true, stockUnits: true, packetSize: true } },
+        manager: { select: { fullName: true } }
+      }
     })
   ]);
+
+  // Today's revenue by hour (business hours 8:00–23:00) for the sparkline-style chart.
+  const hourly = Array.from({ length: 16 }, (_, i) => i + 8).map((h) => ({
+    label: `${h}`,
+    value: todaysSales
+      .filter((s: any) => new Date(s.createdAt).getHours() === h)
+      .reduce((acc: number, s: any) => acc + s.totalAmount, 0),
+  }));
+
+  // Revenue for each of the last 7 days.
+  const daily = Array.from({ length: 7 }, (_, i) => {
+    const start = new Date();
+    start.setDate(start.getDate() - (6 - i));
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    const value = weekSales
+      .filter((s: any) => {
+        const d = new Date(s.createdAt);
+        return d >= start && d < end;
+      })
+      .reduce((acc: number, s: any) => acc + s.totalAmount, 0);
+    return { label: start.toLocaleDateString([], { weekday: "short" }), value };
+  });
 
   // Auto-resolve 'low_stock' alerts if product stock is now above threshold
   let resolvedIds: string[] = [];
@@ -115,8 +159,14 @@ export default async function AdminDashboardPage() {
         ))}
       </div>
 
+      {pendingSales.length > 0 && (
+        <div className="mb-8">
+          <ApprovalsPanel pending={pendingSales as any} />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        
+
         {/* 7.3 Alerts & Notifications Panel */}
         <div className="lg:col-span-1 bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-sm border border-red-200 dark:border-red-900/50 flex flex-col h-96">
           <div className="flex justify-between items-center mb-4">
@@ -188,6 +238,12 @@ export default async function AdminDashboardPage() {
             </table>
           </div>
         </div>
+      </div>
+
+      {/* Revenue trend charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <BarChart title="Today's Revenue by Hour" data={hourly} accent="bg-green-500" />
+        <BarChart title="Last 7 Days" data={daily} accent="bg-purple-500" />
       </div>
 
       {/* Admin Quick Actions */}
