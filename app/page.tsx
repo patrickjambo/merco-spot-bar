@@ -1,129 +1,72 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { getPrisma } from "@/lib/prisma";
+import HomeHero from "@/app/components/HomeHero";
 
-const carouselItems = [
-  {
-    image: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?q=80&w=2000&auto=format&fit=crop",
-    title1: "MERICO SPOT",
-    title2: "BAR & GRILL",
-    desc: "The ultimate destination for premium drinks, delicious food, and an unforgettable atmosphere."
-  },
-  {
-    image: "https://images.unsplash.com/photo-1541532713592-79a0317b6b77?q=80&w=2000&auto=format&fit=crop",
-    title1: "EXCEPTIONAL",
-    title2: "CUSTOMER CARE",
-    desc: "Our customers are our first priority. We provide world-class service with a smile."
-  },
-  {
-    image: "https://images.unsplash.com/photo-1545128485-c400e7702796?q=80&w=2000&auto=format&fit=crop",
-    title1: "VIBRANT",
-    title2: "ATMOSPHERE",
-    desc: "Feel the energy, enjoy the music, and make memories that will last a lifetime."
-  },
-  {
-    image: "/logo.png",
-    title1: "ALWAYS",
-    title2: "HERE FOR YOU",
-    desc: "Merico Spot Bar & Grill is here for you. We provide the perfect environment for all your unforgettable moments.",
-    isLogo: true
+// Render on request (like the menu) so product images optimize at request time and
+// the build never depends on the database being reachable.
+export const dynamic = "force-dynamic";
+
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?q=80&w=800&auto=format&fit=crop";
+
+// Only trust real image sources (uploaded base64 or full URLs); anything else
+// (e.g. legacy "/products/x.jpg" paths) falls back to a generic drink photo.
+function resolveImage(imageUrl?: string | null) {
+  if (imageUrl && (imageUrl.startsWith("http") || imageUrl.startsWith("data:"))) return imageUrl;
+  return FALLBACK_IMAGE;
+}
+
+export default async function Home() {
+  const prisma = getPrisma();
+
+  let products: any[] = [];
+  try {
+    products = await prisma.product.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        pricePerUnit: true,
+        imageUrl: true,
+        stockUnits: true,
+        minStockThreshold: true,
+      },
+    });
+  } catch (error) {
+    console.error("Homepage products load failed:", error);
   }
-];
 
-
-const specialItems = [
-  {
-    title: "Signature Cocktails",
-    desc: "Expertly crafted drinks mixed perfectly by our professional bartenders to light up your night.",
-    image: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?q=80&w=800&auto=format&fit=crop"
-  },
-  {
-    title: "Gourmet Grills",
-    desc: "Mouth-watering grilled specials, from juicy burgers to premium steak cuts, seasoned to perfection.",
-    image: "https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=800&auto=format&fit=crop"
-  },
-  {
-    title: "Ice Cold Drafts",
-    desc: "A wide selection of local and imported beers on tap, served at the absolute perfect temperature.",
-    image: "https://images.unsplash.com/photo-1532634922-8fe0b757fb13?q=80&w=800&auto=format&fit=crop"
-  },
-  {
-    title: "Premium Wines",
-    desc: "An exquisite collection of vintage and reserve wines to perfectly complement your evening.",
-    image: "https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?q=80&w=800&auto=format&fit=crop"
-  },
-  {
-    title: "Exclusive Whiskey",
-    desc: "Aged to perfection, our top-shelf whiskey selection offers a smooth and rich tasting experience.",
-    image: "https://images.unsplash.com/photo-1527281400683-1aae777175f8?q=80&w=800&auto=format&fit=crop"
-  }
-];
-
-export default function Home() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % carouselItems.length);
-    }, 3000);
-    return () => clearInterval(timer);
-  }, []);
+  // Showcase in-stock items first, then take a handful for the specials strip.
+  const featured = [...products]
+    .sort((a, b) => (b.stockUnits > 0 ? 1 : 0) - (a.stockUnits > 0 ? 1 : 0))
+    .slice(0, 12)
+    .map((p) => {
+      const soldOut = p.stockUnits <= 0;
+      const low = !soldOut && p.stockUnits <= p.minStockThreshold;
+      return {
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        price: p.pricePerUnit,
+        image: resolveImage(p.imageUrl),
+        badge: soldOut ? "Sold out" : low ? "Few left" : "Available",
+        badgeClass: soldOut
+          ? "bg-red-500 text-white"
+          : low
+          ? "bg-amber-500 text-black"
+          : "bg-green-500 text-white",
+      };
+    });
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Hero Section */}
-      <section className="relative w-full h-[92vh] flex items-center justify-center bg-black overflow-hidden">
-        {carouselItems.map((item, index) => (
-          <div 
-            key={index}
-            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
-          >
-            {item.isLogo && <div className="absolute inset-0 bg-black"></div>}
-            <div 
-              className={`absolute inset-0 ${item.isLogo ? 'opacity-80 bg-contain bg-no-repeat' : 'opacity-50 bg-cover'} bg-center transition-transform duration-[10000ms] ease-linear transform hover:scale-110`}
-              style={{ backgroundImage: `url('${item.image}')`, transform: index === currentIndex ? 'scale(1.05)' : 'scale(1)' }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent z-10"></div>
-            
-            <div className="relative z-20 text-center px-4 h-full flex flex-col items-center justify-center">
-              <h1 className={`text-5xl md:text-7xl font-extrabold text-white tracking-tight mb-4 drop-shadow-lg transition-transform duration-700 delay-100 ${index === currentIndex ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-                {item.title1}<br className="md:hidden" /> <span className="text-yellow-500">{item.title2}</span>
-              </h1>
-              <p className={`text-xl md:text-2xl text-gray-200 mb-8 max-w-2xl mx-auto shadow-black drop-shadow-md transition-transform duration-700 delay-200 ${index === currentIndex ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-                {item.desc}
-              </p>
-              
-              <div className={`flex flex-col sm:flex-row gap-4 w-full max-w-md mx-auto transition-transform duration-700 delay-300 ${index === currentIndex ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-                <Link 
-                  href="/login" 
-                  className="flex-1 flex items-center justify-center gap-2 bg-yellow-500 text-zinc-900 px-6 py-4 rounded-xl font-bold hover:bg-yellow-400 transition-all shadow-[0_0_20px_rgba(251,191,36,0.4)] hover:shadow-[0_0_30px_rgba(251,191,36,0.6)]"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                  </svg>
-                  Staff Login
-                </Link>
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* Hero Section (interactive carousel) */}
+      <HomeHero />
 
-        {/* Carousel indicators */}
-        <div className="absolute bottom-8 left-0 right-0 z-30 flex justify-center gap-3">
-          {carouselItems.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => setCurrentIndex(index)}
-              className={`w-3 h-3 rounded-full transition-all ${index === currentIndex ? 'bg-yellow-500 w-8' : 'bg-white/50 hover:bg-white/80'}`}
-              aria-label={`Go to slide ${index + 1}`}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* Featured Products Section */}
+      {/* Live Menu Specials Section */}
       <section id="products" className="w-full py-20 bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative">
         <style>{`
           @keyframes marquee {
@@ -141,31 +84,56 @@ export default function Home() {
         `}</style>
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4 relative z-10 inline-block bg-zinc-50 dark:bg-zinc-950 px-4">Our Specials</h2>
+            <h2 className="text-4xl font-bold mb-4 relative z-10 inline-block bg-zinc-50 dark:bg-zinc-950 px-4">From Our Menu</h2>
             <div className="w-24 h-1 bg-yellow-500 mx-auto rounded-full mt-2"></div>
+            <p className="text-zinc-500 dark:text-zinc-400 mt-4">Live prices, straight from the bar.</p>
           </div>
         </div>
-        
-        <div className="relative w-full">
-          {/* Gradient fading edges for smoother look */}
-          <div className="absolute top-0 left-0 w-24 h-full bg-gradient-to-r from-zinc-50 dark:from-zinc-950 to-transparent z-10 pointer-events-none"></div>
-          <div className="absolute top-0 right-0 w-24 h-full bg-gradient-to-l from-zinc-50 dark:from-zinc-950 to-transparent z-10 pointer-events-none"></div>
-          
-          <div className="animate-marquee gap-8 px-4 pb-8">
-            {/* We duplicate the array to create a seamless infinite scroll loop */}
-            {[...specialItems, ...specialItems].map((item, index) => (
-              <div key={index} className="w-[350px] flex-shrink-0 bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 mx-2">
-                <div className="h-64 bg-gray-300 relative group">
-                  <Image src={item.image} alt={item.title} fill className="object-cover group-hover:scale-110 transition-transform duration-700" />
-                </div>
-                <div className="p-6">
-                  <h3 className="text-2xl font-bold mb-2">{item.title}</h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">{item.desc}</p>
-                </div>
-              </div>
-            ))}
+
+        {featured.length === 0 ? (
+          <div className="text-center">
+            <Link href="/menu" className="inline-block bg-yellow-500 text-zinc-900 px-8 py-4 rounded-xl font-bold hover:bg-yellow-400 transition-all">
+              Browse the full menu &rarr;
+            </Link>
           </div>
-        </div>
+        ) : (
+          <div className="relative w-full">
+            {/* Gradient fading edges for a smoother look */}
+            <div className="absolute top-0 left-0 w-24 h-full bg-gradient-to-r from-zinc-50 dark:from-zinc-950 to-transparent z-10 pointer-events-none"></div>
+            <div className="absolute top-0 right-0 w-24 h-full bg-gradient-to-l from-zinc-50 dark:from-zinc-950 to-transparent z-10 pointer-events-none"></div>
+
+            <div className="animate-marquee gap-8 px-4 pb-8">
+              {/* Duplicate the list for a seamless infinite scroll loop */}
+              {[...featured, ...featured].map((item, index) => (
+                <div key={index} className="w-[300px] flex-shrink-0 bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 mx-2">
+                  <div className="h-56 bg-gray-200 dark:bg-zinc-800 relative group">
+                    <Image src={item.image} alt={item.name} fill className="object-cover group-hover:scale-110 transition-transform duration-700" />
+                    <span className={`absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full shadow ${item.badgeClass}`}>
+                      {item.badge}
+                    </span>
+                  </div>
+                  <div className="p-5">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-bold truncate">{item.name}</h3>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{item.category}</p>
+                      </div>
+                      <span className="text-lg font-extrabold text-yellow-600 dark:text-yellow-500 whitespace-nowrap">
+                        {item.price.toLocaleString()} <span className="text-xs">RWF</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-center mt-8">
+              <Link href="/menu" className="inline-flex items-center gap-2 text-yellow-600 font-bold hover:text-yellow-700">
+                See the full menu <span>&rarr;</span>
+              </Link>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* About Section */}
