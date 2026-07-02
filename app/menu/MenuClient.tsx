@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo } from "react";
-import Image from "next/image";
+import ProductImage from "@/app/components/ProductImage";
 
 export default function MenuClient({ products }: { products: any[] }) {
   const [search, setSearch] = useState("");
@@ -88,10 +88,10 @@ export default function MenuClient({ products }: { products: any[] }) {
             <div className="relative w-32 h-40 mb-4 rounded-xl overflow-hidden flex items-center justify-center bg-zinc-50 dark:bg-zinc-800/50 w-full">
               {product.imageUrl ? (
                 <div className="relative w-full h-full p-2">
-                  <Image
+                  <ProductImage
                     src={product.imageUrl}
+                    fallback={product.fallbackUrl || product.imageUrl}
                     alt={product.name}
-                    fill
                     className="object-contain group-hover:scale-105 transition-transform duration-300"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />

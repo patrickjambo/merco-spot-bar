@@ -2,20 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { getPrisma } from "@/lib/prisma";
 import HomeHero from "@/app/components/HomeHero";
+import ProductImage from "@/app/components/ProductImage";
+import { resolveProductImage, fallbackForCategory } from "@/lib/productImages";
 
 // Render on request (like the menu) so product images optimize at request time and
 // the build never depends on the database being reachable.
 export const dynamic = "force-dynamic";
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?q=80&w=800&auto=format&fit=crop";
-
-// Only trust real image sources (uploaded base64 or full URLs); anything else
-// (e.g. legacy "/products/x.jpg" paths) falls back to a generic drink photo.
-function resolveImage(imageUrl?: string | null) {
-  if (imageUrl && (imageUrl.startsWith("http") || imageUrl.startsWith("data:"))) return imageUrl;
-  return FALLBACK_IMAGE;
-}
 
 export default async function Home() {
   const prisma = getPrisma();
@@ -51,7 +43,8 @@ export default async function Home() {
         name: p.name,
         category: p.category,
         price: p.pricePerUnit,
-        image: resolveImage(p.imageUrl),
+        image: resolveProductImage(p.imageUrl, p.category, p.name),
+        fallback: fallbackForCategory(p.category),
         badge: soldOut ? "Sold out" : low ? "Few left" : "Available",
         badgeClass: soldOut
           ? "bg-red-500 text-white"
@@ -107,7 +100,7 @@ export default async function Home() {
               {[...featured, ...featured].map((item, index) => (
                 <div key={index} className="w-[300px] flex-shrink-0 bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 mx-2">
                   <div className="h-56 bg-gray-200 dark:bg-zinc-800 relative group">
-                    <Image src={item.image} alt={item.name} fill className="object-cover group-hover:scale-110 transition-transform duration-700" />
+                    <ProductImage src={item.image} fallback={item.fallback} alt={item.name} sizes="300px" className="object-cover group-hover:scale-110 transition-transform duration-700" />
                     <span className={`absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full shadow ${item.badgeClass}`}>
                       {item.badge}
                     </span>
