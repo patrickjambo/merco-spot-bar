@@ -34,7 +34,16 @@ export default function AdminProductsPage() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
-    
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please choose an image file.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image is too large. Please choose a file under 10MB.");
+      return;
+    }
+
     setUploadingImage(true);
 
     const reader = new FileReader();
@@ -43,7 +52,7 @@ export default function AdminProductsPage() {
       img.onload = () => {
         const canvas = document.createElement('canvas');
         let { width, height } = img;
-        const MAX_SIZE = 500;
+        const MAX_SIZE = 400;
 
         if (width > height && width > MAX_SIZE) {
           height *= MAX_SIZE / width;
@@ -55,11 +64,19 @@ export default function AdminProductsPage() {
 
         canvas.width = width;
         canvas.height = height;
-        
+
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const base64String = canvas.toDataURL('image/jpeg', 0.8);
+          // Step the quality down until the stored image is small, so product rows
+          // stay light (base64 lives in the DB and is fetched wherever images show).
+          const TARGET_CHARS = 70 * 1024;
+          let quality = 0.7;
+          let base64String = canvas.toDataURL('image/jpeg', quality);
+          while (base64String.length > TARGET_CHARS && quality > 0.4) {
+            quality -= 0.1;
+            base64String = canvas.toDataURL('image/jpeg', quality);
+          }
           setFormData((prev: any) => ({ ...prev, imageUrl: base64String }));
         }
         setUploadingImage(false);
