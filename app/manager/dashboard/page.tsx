@@ -5,6 +5,7 @@ import { verifySession } from "@/lib/auth";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import CloseShiftCard from "./components/CloseShiftCard";
 import OpenTablesSummary from "./components/OpenTablesSummary";
+import BarChart from "@/app/admin/dashboard/components/BarChart";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,11 @@ export default async function DashboardPage() {
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
 
   // Run perfectly in parallel for maximum speed
-  const [todaysSales, lowStockProducts] = await Promise.all([
+  const [todaysSales, lowStockProducts, yesterdaySales] = await Promise.all([
     prisma.sale.findMany({
       where: {
         createdAt: { gte: today },
@@ -32,6 +35,14 @@ export default async function DashboardPage() {
     prisma.product.findMany({
       where: { isActive: true },
       select: { name: true, stockUnits: true, minStockThreshold: true },
+    }),
+    prisma.sale.findMany({
+      where: {
+        status: "confirmed",
+        managerId: session?.userId as string,
+        createdAt: { gte: yesterday, lt: today }
+      },
+      select: { totalAmount: true }
     })
   ]);
 
@@ -41,6 +52,29 @@ export default async function DashboardPage() {
   // Compute low stock items
   const lowStockItems = lowStockProducts.filter((p: any) => p.stockUnits <= p.minStockThreshold);
   const lowStockCount = lowStockItems.length;
+
+  // My performance today: revenue vs yesterday, best seller, hourly breakdown
+  const yesterdayRevenue = yesterdaySales.reduce((acc: number, s: any) => acc + s.totalAmount, 0);
+  const deltaPct = yesterdayRevenue > 0
+    ? Math.round(((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100)
+    : todayRevenue > 0 ? 100 : 0;
+
+  const byProduct: Record<string, { name: string; revenue: number; units: number }> = {};
+  todaysSales.forEach((s: any) => {
+    const name = s.product?.name || "Unknown";
+    if (!byProduct[name]) byProduct[name] = { name, revenue: 0, units: 0 };
+    byProduct[name].revenue += s.totalAmount;
+    byProduct[name].units += s.quantity;
+  });
+  const bestSeller = Object.values(byProduct).sort((a, b) => b.revenue - a.revenue)[0] || null;
+
+  const perfHours = Array.from({ length: 16 }, (_, i) => i + 8); // 8:00–23:00
+  const hourly = perfHours.map((h) => ({
+    label: `${h}`,
+    value: todaysSales
+      .filter((s: any) => new Date(s.createdAt).getHours() === h)
+      .reduce((acc: number, s: any) => acc + s.totalAmount, 0),
+  }));
 
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 p-6 border-t border-zinc-200 dark:border-zinc-800">
@@ -78,6 +112,37 @@ export default async function DashboardPage() {
             <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* My performance today */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 flex flex-col gap-4">
+          <h2 className="text-xl font-bold">My Performance Today</h2>
+          <div>
+            <p className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Revenue vs Yesterday</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-bold text-green-500">{todayRevenue.toLocaleString()} RWF</span>
+              <span className={`text-sm font-bold ${deltaPct >= 0 ? "text-green-600" : "text-red-600"}`}>
+                {deltaPct >= 0 ? "▲" : "▼"} {Math.abs(deltaPct)}%
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">Yesterday: {yesterdayRevenue.toLocaleString()} RWF</p>
+          </div>
+          <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
+            <p className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Your Best Seller</p>
+            {bestSeller ? (
+              <>
+                <p className="text-lg font-bold mt-1 truncate">{bestSeller.name}</p>
+                <p className="text-xs text-zinc-400">{bestSeller.units} sold · {bestSeller.revenue.toLocaleString()} RWF</p>
+              </>
+            ) : (
+              <p className="text-sm text-zinc-400 mt-1">No sales yet today.</p>
+            )}
+          </div>
+        </div>
+        <div className="lg:col-span-2">
+          <BarChart title="Your Revenue by Hour" data={hourly} accent="bg-green-500" />
+        </div>
       </div>
 
       {/* Shift, tables & stock at a glance */}
