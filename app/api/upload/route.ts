@@ -1,38 +1,33 @@
 import { NextResponse } from 'next/server';
-import { writeFile } from 'fs/promises';
-import { join } from 'path';
+import { put } from '@vercel/blob';
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    
+
     if (!file) {
       return NextResponse.json({ error: 'No file received' }, { status: 400 });
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    // Create a unique filename
-    const ext = file.name.split('.').pop();
-    const fileName = `${crypto.randomUUID()}.${ext}`;
-    
-    // Save to public/uploads
-    const uploadDir = join(process.cwd(), 'public', 'uploads');
-    const filePath = join(uploadDir, fileName);
-
-    // Ensure the directory exists
-    const fs = require('fs');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    // Blob storage not configured yet — tell the client to store the image inline
+    // (base64) instead, so uploads keep working until BLOB_READ_WRITE_TOKEN is set.
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json({ error: 'Blob storage not configured', fallback: true }, { status: 501 });
     }
 
-    await writeFile(filePath, buffer);
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const key = `products/${crypto.randomUUID()}.${ext}`;
 
-    return NextResponse.json({ url: `/uploads/${fileName}` });
+    const blob = await put(key, file, {
+      access: 'public',
+      contentType: file.type || 'image/jpeg',
+    });
+
+    return NextResponse.json({ url: blob.url });
   } catch (error) {
     console.error('File upload error:', error);
-    return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
+    // Let the client fall back to inline base64 rather than failing the save.
+    return NextResponse.json({ error: 'Failed to upload file', fallback: true }, { status: 500 });
   }
 }

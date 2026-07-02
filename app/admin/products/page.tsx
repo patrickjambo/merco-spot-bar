@@ -66,20 +66,43 @@ export default function AdminProductsPage() {
         canvas.height = height;
 
         const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          // Step the quality down until the stored image is small, so product rows
-          // stay light (base64 lives in the DB and is fetched wherever images show).
-          const TARGET_CHARS = 70 * 1024;
-          let quality = 0.7;
-          let base64String = canvas.toDataURL('image/jpeg', quality);
-          while (base64String.length > TARGET_CHARS && quality > 0.4) {
-            quality -= 0.1;
-            base64String = canvas.toDataURL('image/jpeg', quality);
+        if (!ctx) {
+          setUploadingImage(false);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Compress: step quality down until small (used inline if Blob upload is unavailable).
+        const TARGET_CHARS = 70 * 1024;
+        let quality = 0.7;
+        let base64String = canvas.toDataURL('image/jpeg', quality);
+        while (base64String.length > TARGET_CHARS && quality > 0.4) {
+          quality -= 0.1;
+          base64String = canvas.toDataURL('image/jpeg', quality);
+        }
+
+        // Prefer uploading to Blob storage (returns a CDN URL); fall back to inline base64.
+        canvas.toBlob(async (blob) => {
+          if (blob) {
+            try {
+              const fd = new FormData();
+              fd.append('file', blob, `product-${Date.now()}.jpg`);
+              const res = await fetch('/api/upload', { method: 'POST', body: fd });
+              if (res.ok) {
+                const data = await res.json();
+                if (data?.url) {
+                  setFormData((prev: any) => ({ ...prev, imageUrl: data.url }));
+                  setUploadingImage(false);
+                  return;
+                }
+              }
+            } catch {
+              /* fall through to inline base64 */
+            }
           }
           setFormData((prev: any) => ({ ...prev, imageUrl: base64String }));
-        }
-        setUploadingImage(false);
+          setUploadingImage(false);
+        }, 'image/jpeg', quality);
       };
       
       img.onerror = () => {
